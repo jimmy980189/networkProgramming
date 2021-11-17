@@ -1,0 +1,52 @@
+<html><head>
+<title>networkProgramming HW01</title>
+<script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk=" crossorigin="anonymous"></script>
+</head><body>
+
+<h1>File Upload</h1>
+
+<p id="demo">You can upload images here.</p>
+
+<!--p>Click <a href="page2.html">here</a> to see another page,
+or click <a href="test.txt">here</a> to download a text file.</p-->
+<img src="images/raccoon.jpeg" alt="404" style="width:50%;"/>
+<!--<input type="file" id="file-uploader" data-target="file-uploader" accept="image/*" multiple="multiple"/>-->
+<form method="post" enctype="multipart/form-data" action="/upload">
+ <div>
+   <label for="file">Choose file to upload</label>
+   <input type="file" id="file" name="file" multiple>
+ </div>
+ <div>
+   <button>Submit</button>
+ </div>
+</form>
+
+
+</body>
+</html>
+<script type="text/javascript">
+    /*var dir = "images";
+    var fileextension = ".jpeg";
+    console.log("aaaa");
+    $(document).ready(function(){
+        $.ajax({
+            url: dir,
+            success: function (data) {
+                $(data).find("a:contains(" + fileextension + ")").each(function () {
+                    var filename = this.href.replace(window.location.host, "").replace("http://", "");
+                        console.log(filename);
+                    $("body").append("<img src='" + dir + filename + "'>");
+                });
+            }
+        });
+    });*/
+    $.ajax({
+url: "images/arch.png",
+/*xhrFields: {
+  responseType: 'blob'
+},*/
+    success (data) {
+        //document.getElementById("demo").innerHTML = data;
+   }
+});
+</script>
