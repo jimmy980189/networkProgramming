@@ -147,6 +147,7 @@ int main(int argc, char **argv) {
     unsigned int length;
     struct sockaddr_in client_addr;
     struct sockaddr_in server_addr;
+    signal(SIGCHLD, SIG_IGN);
     char server_ip[16];
 
     if ((listenfd=socket(AF_INET, SOCK_STREAM,0))<0)
