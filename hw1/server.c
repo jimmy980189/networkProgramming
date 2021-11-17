@@ -10,8 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define BUFSIZE 8096
-
+#define BUFSIZE 8192
 
 char *get_content_type(char* path) {
     const char *last_dot = strrchr(path, '.');
@@ -31,7 +30,6 @@ char *get_content_type(char* path) {
         if (strcmp(last_dot, ".svg") == 0) return "image/svg+xml";
         if (strcmp(last_dot, ".txt") == 0) return "text/plain";
     }
-
     return "application/octet-stream";
 }
 
@@ -50,12 +48,12 @@ void connetction(int fd)
 
     if (!(strncmp(buffer,"GET ",4) && strncmp(buffer,"get ",4))) {
     
+        // "GET /XXX HTTP 1.0" -> "GET /XXX"
         ptr = buffer + 5;
         while(*ptr != ' ' && *ptr != '\0')
             ptr++;
         *ptr = '\0';
 
-        /* 檔掉回上層目錄的路徑『..』 */
         /*
          *for (j=0;j<i-1;j++)
          *    if (buffer[j]=='.'&&buffer[j+1]=='.')
@@ -69,9 +67,9 @@ void connetction(int fd)
         ptr = get_content_type(buffer);
 
         if((file_fd=open(buffer + 5 ,O_RDONLY)) == -1) {
-        const char *c404 = "HTTP/1.1 404 Not Found\r\n"
-            "Connection: close\r\n"
-            "Content-Length: 9\r\n\r\nNot Found";
+            const char *c404 = "HTTP/1.1 404 Not Found\r\n"
+                               "Connection: close\r\n"
+                               "Content-Length: 9\r\n\r\nNot Found";
             write(fd, c404, strlen(c404));
             printf("%s - 404\n", buffer);
             close(fd);
@@ -94,32 +92,59 @@ void connetction(int fd)
         ptr += 16;
 
         int content_len = atoi(ptr);
+        int header_len;
         char filename[128];
+        char *content_start;
         
         ptr = strstr(ptr, "\r\n\r\n");
         ptr += 4;
+        content_start = ptr;
+        header_len = content_start - buffer;
+        
         ptr = strstr(ptr, "filename");
         ptr += 10;
         qtr = filename;
         while(*ptr != '"' && *ptr != '\0')
             *qtr++ = *ptr++;
         *qtr = '\0';
-        printf("%s",filename);
         ptr = strstr(ptr, "\r\n\r\n");
         ptr += 4; // file_start
 
         int file_fd = open(filename, O_RDWR | O_CREAT | O_APPEND, 0644);
-        write(file_fd, ptr, BUFSIZE);
+        len = ret - (ptr - buffer);
+        if(content_len == (ret - header_len))
+            len -= 46;
 
+        /*
+         *printf("ret-header_len: %ld\n", ret-header_len);
+         *printf("Content-Length: %d\n", content_len);
+         */
+        printf("%s - %d\n",filename, len);
+        write(file_fd, ptr, len);
+
+        while ((content_len != (ret-header_len)) && ((ret=read(fd, buffer, BUFSIZE)) > 0)) {
+            printf("%s - %ld\n",filename, ret);
+            if(ret < BUFSIZE) {
+                write(file_fd,buffer,ret-46);
+                break;
+            }
+            write(file_fd,buffer,ret);
+        }
+        const char *c200 = "HTTP/1.1 200 OK\r\n"
+                           "Connection: close\r\n"
+                           "Content-Length: 2\r\n\r\nOk";
+        write(fd, c200, strlen(c200));
 
         exit(3);
     }
 }
 
-int main(int argc, char **argv)
-{
-    int i, pid, listenfd, socketfd;
-    size_t length;
+int main(int argc, char **argv) {
+
+    int pid;
+    int on = 1;
+    int listenfd, socketfd;
+    unsigned int length;
     struct sockaddr_in client_addr;
     struct sockaddr_in server_addr;
     char server_ip[16];
@@ -127,6 +152,7 @@ int main(int argc, char **argv)
     if ((listenfd=socket(AF_INET, SOCK_STREAM,0))<0)
         exit(3);
 
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(8000);
