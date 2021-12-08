@@ -1,10 +1,10 @@
-all: ox_Client ox_Server
+all: client server
 
-ox_Client:	ox_Client.c
-	gcc ox_Client.c -o ox_Client
+ox_client:	client.c
+	gcc client.c -o client
 
-ox_Server:	ox_Server.c
-	gcc ox_Server.c -o ox_Server
+ox_Server:	Server.c
+	gcc server.c -o server
 
 clean:
-	rm ox_Server ox_Client
+	rm server client

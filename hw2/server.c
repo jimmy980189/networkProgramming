@@ -15,6 +15,7 @@
 
 #define MAX_LINE 2048
 #define USER_CNT 4
+#define NUM_ROOM 2
 
 struct User {
     char username[128];
@@ -55,19 +56,22 @@ struct User users[] = {
     },
 };
 
-char square[2][10] = {
-    { 'o', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
-    { 'o', '1', '2', '3', '4', '5', '6', '7', '8', '9' }
+char square[NUM_ROOM][10] = {
+    { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
+    { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }
 };
 
 int checkwin(int);
 void board(int, int);
+void clearBoard(int);
 int login(int);
 int logout(int);
+int game(int, int, int);
 void menu(int);
 void listUsers(int);
 void lanuchMatch(int);
 
+int room = 0;
 int clientfd[FD_SETSIZE];
 int clientid[FD_SETSIZE];
 int rivalfd[FD_SETSIZE];
@@ -140,23 +144,18 @@ int main() {
      */
 
     while(1) {
-
         rfds = allset;
         if ((nready = select(maxfd + 1, &rfds, NULL, NULL, NULL))  == -1) {
             perror("select() failed\n");
         }
-
 		if(FD_ISSET(listenfd, &rfds)) {
-
             clilen = sizeof(client_addr);
-
 			printf("\naccpet connection\n");
 
 			if((connfd = accept(listenfd, (struct sockaddr *)&client_addr , &clilen)) < 0) {
 				perror("accept() failed\n");
 				exit(3);
 			}
-
 			printf("accpet a new client: %s:%d\n", inet_ntoa(client_addr.sin_addr), client_addr.sin_port);
 
             clientid[connfd] = login(connfd);
@@ -208,9 +207,26 @@ int main() {
                         printf("%d\n", sockfd);
                         dprintf(sockfd, "%s\n", users[clientid[rivalfd[sockfd]]].username);
                         dprintf(rivalfd[sockfd], "%s 接收你的邀請\n", users[clientid[rivalfd[sockfd]]].username);
+
+                        users[clientid[sockfd]].isInGame = 1;
+                        users[clientid[rivalfd[sockfd]]].isInGame = 1;
                     }
                     else if (strncmp(buf, "no", 2) == 0 && (rivalfd[sockfd] != -1)) {
                         dprintf(rivalfd[sockfd], "%s 拒絕你的邀請\n", users[clientid[rivalfd[sockfd]]].username);
+                    }
+                    else if (users[clientid[sockfd]].isInGame) {
+                       dprintf(sockfd, "TESTTEST\n"); 
+                       dprintf(rivalfd[sockfd], "TESTTEST\n"); 
+
+                       if (room < NUM_ROOM) {
+                           if (game(sockfd, rivalfd[sockfd], room++)) {
+                               users[clientid[sockfd]].isInGame = 0;
+                               users[clientid[rivalfd[sockfd]]].isInGame = 0;
+                               rivalfd[sockfd] = -1;
+                               rivalfd[rivalfd[sockfd]] = -1;
+                               --room;
+                           }
+                       }
                     }
                     else {
                         switch (buf[0]) {
@@ -338,9 +354,7 @@ void lanuchMatch(int fd) {
 
 
         if (fd != rivalFd) {
-
             if (users[clientid[rivalFd]].isLogin) {
-
                 if (!users[clientid[rivalFd]].isInGame) {
                     
                     rivalfd[rivalFd] = fd;   // A --> B
@@ -349,95 +363,114 @@ void lanuchMatch(int fd) {
                     dprintf(fd, "%s\n", users[clientid[rivalFd]].username);
                     dprintf(rivalfd[fd], "%s 邀請你遊玩, 是否加入? [yes/no]: ", users[clientid[fd]].username);
                 }
-
                 else {
-                    dprintf(fd, "玩家正在遊玩\n");
+                    dprintf(fd, "   玩家正在遊玩\n");
                     menu(fd);
                     return;
                 }
             }
-
             else {
-                dprintf(fd, "玩家不在線上\n");
+                dprintf(fd, "   玩家不在線上\n");
                 menu(fd);
                 return;
             }
         }
 
         else {
-            dprintf(fd, "你不能與自己遊玩\n");
+            dprintf(fd, "   你不能與自己遊玩\n");
             menu(fd);
             return;
         }
     }
+}
 
-    /*
-     *while (check == -1) {
-     *    if (read(fd, buf, MAX_LINE) > 0) {
-     *        printf("fd: %d choose: %s\n", fd, buf);
-     *    }
-     *}
-     */
+int game(int fd, int rivalfd, int idx) {
+    int i = -1;
+    int player = 1;
+    int turnfd = -1;
+    int choice;
+    char mark;
+    char buf[8];
+
+    while (i ==  - 1) {
+        board(fd, idx);
+        board(rivalfd, idx);
+
+        player = (player % 2) ? 1 : 2;
+
+        if (player == 1)
+            turnfd = fd;
+        else 
+            turnfd = rivalfd;
+
+        dprintf(turnfd, "Player %d, enter a number:  ", player);
+        if (read(turnfd, buf, 8) > 0) {
+            choice = atoi(buf);
+        }
+        printf("choice: %d\n", choice);
+
+        mark = (player == 1) ? 'X' : 'O';
+
+        if (choice == 1 && square[idx][1] == '1')
+            square[idx][1] = mark;
+            
+        else if (choice == 2 && square[idx][2] == '2')
+            square[idx][2] = mark;
+            
+        else if (choice == 3 && square[idx][3] == '3')
+            square[idx][3] = mark;
+            
+        else if (choice == 4 && square[idx][4] == '4')
+            square[idx][4] = mark;
+            
+        else if (choice == 5 && square[idx][5] == '5')
+            square[idx][5] = mark;
+            
+        else if (choice == 6 && square[idx][6] == '6')
+            square[idx][6] = mark;
+            
+        else if (choice == 7 && square[idx][7] == '7')
+            square[idx][7] = mark;
+            
+        else if (choice == 8 && square[idx][8] == '8')
+            square[idx][8] = mark;
+            
+        else if (choice == 9 && square[idx][9] == '9')
+            square[idx][9] = mark;
+            
+        else {
+            dprintf(turnfd, "Invalid move ");
+
+            /*player--;*/
+            continue;
+        }
+
+        i = checkwin(0);
+        player++;
+    }
     
-/*
- *
- *
- *    while (i ==  - 1) {
- *        board(fd, 0);
- *        player = (player % 2) ? 1 : 2;
- *
- *        printf("Player %d, enter a number:  ", player);
- *        scanf("%d", &choice);
- *
- *        mark = (player == 1) ? 'X' : 'O';
- *
- *        if (choice == 1 && square[i][1] == '1')
- *            square[i][1] = mark;
- *            
- *        else if (choice == 2 && square[i][2] == '2')
- *            square[i][2] = mark;
- *            
- *        else if (choice == 3 && square[i][3] == '3')
- *            square[i][3] = mark;
- *            
- *        else if (choice == 4 && square[i][4] == '4')
- *            square[i][4] = mark;
- *            
- *        else if (choice == 5 && square[i][5] == '5')
- *            square[i][5] = mark;
- *            
- *        else if (choice == 6 && square[i][6] == '6')
- *            square[i][6] = mark;
- *            
- *        else if (choice == 7 && square[i][7] == '7')
- *            square[i][7] = mark;
- *            
- *        else if (choice == 8 && square[i][8] == '8')
- *            square[i][8] = mark;
- *            
- *        else if (choice == 9 && square[i][9] == '9')
- *            square[i][9] = mark;
- *            
- *        else {
- *            printf("Invalid move ");
- *
- *            player--;
- *            getchar();
- *        }
- *
- *        i = checkwin(0);
- *        player++;
- *    }
- *    
- *    board(fd, 0);
- *    
- *    if (i == 1)
- *        printf("==>\aPlayer %d win ", --player);
- *    else
- *        printf("==>\aGame draw");
- *
- *    getchar();
- */
+    board(fd, idx);
+    board(rivalfd, idx);
+    
+    if (i == 1) {
+        dprintf(fd, "==>\aPlayer %d win \n", --player);
+        dprintf(rivalfd, "==>\aPlayer %d win \n", --player);
+    }
+    else {
+        dprintf(fd, "==>\aGame draw");
+        dprintf(rivalfd, "==>\aGame draw");
+    }
+
+    menu(fd);
+    menu(rivalfd);
+    clearBoard(idx);
+
+    return 1;
+}
+
+void clearBoard(int idx) {
+    for (int i = 0; i < 10; i++)
+        square[idx][i] = '0' + i; 
 }
 
 int checkwin(int i) {
@@ -476,7 +509,7 @@ int checkwin(int i) {
 
 void board(int fd, int i) {
     /*system("clear");*/
-    dprintf(fd, "\e[1;1H\e[2J\n\n\tTic Tac Toe\n\n");
+    dprintf(fd, "\e[1;1H\e[2J\n\n\tTic Tac Toe - Room_%d\n\n", i);
 
     dprintf(fd, "Player 1 (X)  -  Player 2 (O)\n\n\n");
 
