@@ -55,21 +55,27 @@ struct User users[] = {
     },
 };
 
-char square[10] = { 'o', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+char square[2][10] = {
+    { 'o', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
+    { 'o', '1', '2', '3', '4', '5', '6', '7', '8', '9' }
+};
 
-int checkwin();
-void board();
+int checkwin(int);
+void board(int, int);
 int login(int);
 int logout(int);
 void menu(int);
 void listUsers(int);
 void lanuchMatch(int);
 
+int clientfd[FD_SETSIZE];
+int clientid[FD_SETSIZE];
+int rivalfd[FD_SETSIZE];
+
 int main() {
 
     int on = 1;
     int sockfd, listenfd, connfd;
-    int clientfd[FD_SETSIZE];
     int maxfd;
     int maxi;
     int nready;
@@ -120,6 +126,8 @@ int main() {
 	maxi = -1;
 	for(int i=0; i < FD_SETSIZE; i++) {
 		clientfd[i] = -1;
+        clientid[i] = -1;
+        rivalfd[i] = -1;
 	}
 	FD_ZERO(&allset);
 	FD_SET(listenfd , &allset);
@@ -139,8 +147,7 @@ int main() {
         }
 
 		if(FD_ISSET(listenfd, &rfds)) {
-			/*接收客戶端的請求*/
-            printf("%d\n",nready);
+
             clilen = sizeof(client_addr);
 
 			printf("\naccpet connection\n");
@@ -152,18 +159,18 @@ int main() {
 
 			printf("accpet a new client: %s:%d\n", inet_ntoa(client_addr.sin_addr), client_addr.sin_port);
 
-            if(!login(connfd))
-                continue;
-
+            clientid[connfd] = login(connfd);
+            clientfd[connfd] = connfd;
+            i = connfd;
             menu(connfd);
-
-			/*將客戶連結套接字描述符新增到陣列*/
-			for(i = 0; i < FD_SETSIZE; ++i) {
-				if(clientfd[i] < 0) {
-					clientfd[i] = connfd;
-					break;
-				}
-			}
+            /*
+			 *for(i = 0; i < FD_SETSIZE; ++i) {
+			 *    if(clientfd[i] < 0) {
+			 *        clientfd[i] = connfd;
+			 *        break;
+			 *    }
+			 *}
+             */
 
 			if(FD_SETSIZE == i) {
 				perror("too many connection.\n");
@@ -185,7 +192,7 @@ int main() {
 			if((sockfd = clientfd[i]) < 0) //clientfd == -1 => 404
 				continue;
 			if(FD_ISSET(sockfd, &rfds)) {
-				/*處理客戶請求*/
+
 				printf("\nreading the socket \n");
 
 				bzero(buf, MAX_LINE);
@@ -197,20 +204,32 @@ int main() {
 				else{
 					printf("clientfd[%d] connfd: %d send message: %s\n",i ,clientfd[i], buf);
                     
-                    switch (buf[0]) {
-                        case '1':
-                            listUsers(sockfd);
-                            break;
-                        case '2':
-                            lanuchMatch(sockfd);
-                            break;
-                        case '3':
-                            logout(sockfd);
-                            break;
-                        default:
-                            menu(sockfd);
-                            dprintf(sockfd, "command not found\n");
-
+                    if (strncmp(buf, "yes", 3) == 0 && (rivalfd[sockfd] != -1)) { //遊戲結束後 rival 要歸 -1
+                        printf("%d\n", sockfd);
+                        dprintf(sockfd, "%s\n", users[clientid[rivalfd[sockfd]]].username);
+                        dprintf(rivalfd[sockfd], "%s 接收你的邀請\n", users[clientid[rivalfd[sockfd]]].username);
+                    }
+                    else if (strncmp(buf, "no", 2) == 0 && (rivalfd[sockfd] != -1)) {
+                        dprintf(rivalfd[sockfd], "%s 拒絕你的邀請\n", users[clientid[rivalfd[sockfd]]].username);
+                    }
+                    else {
+                        switch (buf[0]) {
+                            case '1':
+                                listUsers(sockfd);
+                                break;
+                            case '2':
+                                lanuchMatch(sockfd);
+                                break;
+                            case '3': //logout
+                                logout(sockfd);
+                                close(sockfd);
+                                FD_CLR(sockfd, &allset);
+                                clientfd[i] = -1;
+                                break;
+                            default:
+                                menu(sockfd);
+                                dprintf(sockfd, "command not found\n");
+                        }
                     }
                     // echo server
                     /*
@@ -225,67 +244,6 @@ int main() {
 			}
 		}
 	}
-
-    // local two player
-/*
- *    int player = 1, i = -1, choice;
- *    char mark;
- *    while (i ==  - 1) {
- *        board();
- *        player = (player % 2) ? 1 : 2;
- *
- *        printf("Player %d, enter a number:  ", player);
- *        scanf("%d", &choice);
- *
- *        mark = (player == 1) ? 'X' : 'O';
- *
- *        if (choice == 1 && square[1] == '1')
- *            square[1] = mark;
- *            
- *        else if (choice == 2 && square[2] == '2')
- *            square[2] = mark;
- *            
- *        else if (choice == 3 && square[3] == '3')
- *            square[3] = mark;
- *            
- *        else if (choice == 4 && square[4] == '4')
- *            square[4] = mark;
- *            
- *        else if (choice == 5 && square[5] == '5')
- *            square[5] = mark;
- *            
- *        else if (choice == 6 && square[6] == '6')
- *            square[6] = mark;
- *            
- *        else if (choice == 7 && square[7] == '7')
- *            square[7] = mark;
- *            
- *        else if (choice == 8 && square[8] == '8')
- *            square[8] = mark;
- *            
- *        else if (choice == 9 && square[9] == '9')
- *            square[9] = mark;
- *            
- *        else {
- *            printf("Invalid move ");
- *
- *            player--;
- *            getchar();
- *        }
- *
- *        i = checkwin();
- *        player++;
- *    }
- *    
- *    board();
- *    
- *    if (i == 1)
- *        printf("==>\aPlayer %d win ", --player);
- *    else
- *        printf("==>\aGame draw");
- *
- *    getchar();
- */
 
     return 0;
 }
@@ -302,15 +260,21 @@ int login(int fd) {
     char tmp_password[128];
 
     while (1) {
+        dprintf(fd, "username: ");
         if (read(fd, tmp_account, sizeof(tmp_account)) > 0) {
+            dprintf(fd, "password: ");
             if (read(fd, tmp_password, sizeof(tmp_password)) > 0) {
                 for (int i = 0; i < USER_CNT; i++) {
                     if ((strncmp(tmp_account, users[i].username, strlen(users[i].username)) == 0) && 
                         (strncmp(tmp_password, users[i].password, strlen(users[i].password)) == 0)) {
-                        users[i].isLogin = 1;
-                        users[i].fd = fd;
-                        dprintf(fd, "Login Success\n");
-                        return 1;
+                        if (!users[i].isLogin) {
+                            users[i].isLogin = 1;
+                            users[i].fd = fd;
+                            dprintf(fd, "Login Success\n");
+                            return i;
+                        }
+                        else
+                            dprintf(fd, "此帳號已登入\n");
                     }
                 }
             }
@@ -320,90 +284,215 @@ int login(int fd) {
 }
 
 int logout(int fd) {
-
+    for (int i = 0; i < USER_CNT; i++) {
+        if (users[i].fd == fd) {
+            users[i].isLogin = 0;
+            users[i].fd = -1;
+            break;
+        }
+    }
     return 0;
 }
 
 void menu(int fd) {
-    dprintf(fd, "========================\n");
+    dprintf(fd, "================================\n");
     dprintf(fd, "   1. 查看在線使用者    \n");
     dprintf(fd, "   2. 對玩家發起對戰    \n");
     dprintf(fd, "   3. 登出              \n");
-    dprintf(fd, "========================\n");
+    dprintf(fd, "================================\n");
 }
 
 void listUsers(int fd) {
-    dprintf(fd, "========================\n");
+    dprintf(fd, "================================\n");
     dprintf(fd, "   目前在線玩家列表     \n");
-    dprintf(fd, "========================\n");
+    dprintf(fd, "================================\n");
     int cnt = 0;
     for (int i = 0; i < 4; i++) {
         if (users[i].isLogin == 1) {
-            dprintf(fd, "   [%d] %s fd:%d\n", i, users[i].username, users[i].fd);
-            ++cnt;
+           dprintf(fd, "   [%d] %s fd:%d isInGame: %d\n", cnt++, users[i].username, users[i].fd, users[i].isInGame);
         }
     }
     dprintf(fd, "            共 %d 人在線\n", cnt);
-    dprintf(fd, "========================\n");
+    dprintf(fd, "================================\n");
 }
 
 void lanuchMatch(int fd) {
 
+    int rivalFd;
+    int player = 1, i = -1, choice;
+    int check = -1;
+    char mark;
+    char buf[MAX_LINE];
+    
+    listUsers(fd);
+    dprintf(fd, "   選擇你的對手 [fd]: ");
+    if (read(fd, buf, MAX_LINE) > 0) {
+        if (buf[0] >= '0' && buf[0] <= '9') {
+            rivalFd= atoi(buf); 
+        }
+        else {
+            dprintf(fd, "Invalid Input\n");
+            return;
+        }
+        printf("rivalfd: %d\n", rivalfd[fd]);
+
+
+        if (fd != rivalFd) {
+
+            if (users[clientid[rivalFd]].isLogin) {
+
+                if (!users[clientid[rivalFd]].isInGame) {
+                    
+                    rivalfd[rivalFd] = fd;   // A --> B
+                    rivalfd[fd] = rivalFd;   // B --> A
+                    
+                    dprintf(fd, "%s\n", users[clientid[rivalFd]].username);
+                    dprintf(rivalfd[fd], "%s 邀請你遊玩, 是否加入? [yes/no]: ", users[clientid[fd]].username);
+                }
+
+                else {
+                    dprintf(fd, "玩家正在遊玩\n");
+                    menu(fd);
+                    return;
+                }
+            }
+
+            else {
+                dprintf(fd, "玩家不在線上\n");
+                menu(fd);
+                return;
+            }
+        }
+
+        else {
+            dprintf(fd, "你不能與自己遊玩\n");
+            menu(fd);
+            return;
+        }
+    }
+
+    /*
+     *while (check == -1) {
+     *    if (read(fd, buf, MAX_LINE) > 0) {
+     *        printf("fd: %d choose: %s\n", fd, buf);
+     *    }
+     *}
+     */
+    
+/*
+ *
+ *
+ *    while (i ==  - 1) {
+ *        board(fd, 0);
+ *        player = (player % 2) ? 1 : 2;
+ *
+ *        printf("Player %d, enter a number:  ", player);
+ *        scanf("%d", &choice);
+ *
+ *        mark = (player == 1) ? 'X' : 'O';
+ *
+ *        if (choice == 1 && square[i][1] == '1')
+ *            square[i][1] = mark;
+ *            
+ *        else if (choice == 2 && square[i][2] == '2')
+ *            square[i][2] = mark;
+ *            
+ *        else if (choice == 3 && square[i][3] == '3')
+ *            square[i][3] = mark;
+ *            
+ *        else if (choice == 4 && square[i][4] == '4')
+ *            square[i][4] = mark;
+ *            
+ *        else if (choice == 5 && square[i][5] == '5')
+ *            square[i][5] = mark;
+ *            
+ *        else if (choice == 6 && square[i][6] == '6')
+ *            square[i][6] = mark;
+ *            
+ *        else if (choice == 7 && square[i][7] == '7')
+ *            square[i][7] = mark;
+ *            
+ *        else if (choice == 8 && square[i][8] == '8')
+ *            square[i][8] = mark;
+ *            
+ *        else if (choice == 9 && square[i][9] == '9')
+ *            square[i][9] = mark;
+ *            
+ *        else {
+ *            printf("Invalid move ");
+ *
+ *            player--;
+ *            getchar();
+ *        }
+ *
+ *        i = checkwin(0);
+ *        player++;
+ *    }
+ *    
+ *    board(fd, 0);
+ *    
+ *    if (i == 1)
+ *        printf("==>\aPlayer %d win ", --player);
+ *    else
+ *        printf("==>\aGame draw");
+ *
+ *    getchar();
+ */
 }
 
-int checkwin() {
-    if (square[1] == square[2] && square[2] == square[3])
+int checkwin(int i) {
+    if (square[i][1] == square[i][2] && square[i][2] == square[i][3])
         return 1;
         
-    else if (square[4] == square[5] && square[5] == square[6])
+    else if (square[i][4] == square[i][5] && square[i][5] == square[i][6])
         return 1;
         
-    else if (square[7] == square[8] && square[8] == square[9])
+    else if (square[i][7] == square[i][8] && square[i][8] == square[i][9])
         return 1;
         
-    else if (square[1] == square[4] && square[4] == square[7])
+    else if (square[i][1] == square[i][4] && square[i][4] == square[i][7])
         return 1;
         
-    else if (square[2] == square[5] && square[5] == square[8])
+    else if (square[i][2] == square[i][5] && square[i][5] == square[i][8])
         return 1;
         
-    else if (square[3] == square[6] && square[6] == square[9])
+    else if (square[i][3] == square[i][6] && square[i][6] == square[i][9])
         return 1;
         
-    else if (square[1] == square[5] && square[5] == square[9])
+    else if (square[i][1] == square[i][5] && square[i][5] == square[i][9])
         return 1;
         
-    else if (square[3] == square[5] && square[5] == square[7])
+    else if (square[i][3] == square[i][5] && square[i][5] == square[i][7])
         return 1;
         
-    else if (square[1] != '1' && square[2] != '2' && square[3] != '3' &&
-        square[4] != '4' && square[5] != '5' && square[6] != '6' && square[7] 
-        != '7' && square[8] != '8' && square[9] != '9')
+    else if (square[i][1] != '1' && square[i][2] != '2' && square[i][3] != '3' &&
+        square[i][4] != '4' && square[i][5] != '5' && square[i][6] != '6' && square[i][7] 
+        != '7' && square[i][8] != '8' && square[i][9] != '9')
 
         return 0;
     else
         return  - 1;
 }
 
-void board() {
-    system("clear");
-    printf("\n\n\tTic Tac Toe\n\n");
+void board(int fd, int i) {
+    /*system("clear");*/
+    dprintf(fd, "\e[1;1H\e[2J\n\n\tTic Tac Toe\n\n");
 
-    printf("Player 1 (X)  -  Player 2 (O)\n\n\n");
+    dprintf(fd, "Player 1 (X)  -  Player 2 (O)\n\n\n");
 
 
-    printf("     |     |     \n");
-    printf("  %c  |  %c  |  %c \n", square[1], square[2], square[3]);
+    dprintf(fd, "     |     |     \n");
+    dprintf(fd, "  %c  |  %c  |  %c \n", square[i][1], square[i][2], square[i][3]);
 
-    printf("_____|_____|_____\n");
-    printf("     |     |     \n");
+    dprintf(fd, "_____|_____|_____\n");
+    dprintf(fd, "     |     |     \n");
 
-    printf("  %c  |  %c  |  %c \n", square[4], square[5], square[6]);
+    dprintf(fd, "  %c  |  %c  |  %c \n", square[i][4], square[i][5], square[i][6]);
 
-    printf("_____|_____|_____\n");
-    printf("     |     |     \n");
+    dprintf(fd, "_____|_____|_____\n");
+    dprintf(fd, "     |     |     \n");
 
-    printf("  %c  |  %c  |  %c \n", square[7], square[8], square[9]);
+    dprintf(fd, "  %c  |  %c  |  %c \n", square[i][7], square[i][8], square[i][9]);
 
-    printf("     |     |     \n\n");
+    dprintf(fd, "     |     |     \n\n");
 }
