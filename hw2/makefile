@@ -1,9 +1,9 @@
 all: client server
 
-ox_client:	client.c
-	gcc client.c -o client
+client:	client.c
+	gcc client.c -o client -lpthread
 
-ox_Server:	Server.c
+server:	server.c
 	gcc server.c -o server
 
 clean:

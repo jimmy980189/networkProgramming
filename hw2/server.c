@@ -87,7 +87,6 @@ int main() {
     char server_ip[16];
     char buf[MAX_LINE];
     ssize_t n;
-    /*ssize_t ret;*/
 
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
@@ -203,7 +202,7 @@ int main() {
 				else{
 					printf("clientfd[%d] connfd: %d send message: %s\n",i ,clientfd[i], buf);
                     
-                    if (strncmp(buf, "yes", 3) == 0 && (rivalfd[sockfd] != -1)) { //遊戲結束後 rival 要歸 -1
+                    if (strncmp(buf, "yes", 3) == 0 && (rivalfd[sockfd] != -1)) { 
                         printf("%d\n", sockfd);
                         dprintf(sockfd, "%s\n", users[clientid[rivalfd[sockfd]]].username);
                         dprintf(rivalfd[sockfd], "%s 接收你的邀請\n", users[clientid[rivalfd[sockfd]]].username);
@@ -247,13 +246,6 @@ int main() {
                                 dprintf(sockfd, "command not found\n");
                         }
                     }
-                    // echo server
-                    /*
-					 *if((ret = write(sockfd, buf, n)) != n) {
-					 *    printf("write() failed\n");
-					 *    break;
-					 *}
-                     */
 				}
 				if(--nready <= 0)
 					break;
@@ -263,13 +255,6 @@ int main() {
 
     return 0;
 }
-
-/*********************************************
-FUNCTION TO RETURN GAME STATUS
-1 FOR GAME IS OVER WITH RESULT
--1 FOR GAME IS IN PROGRESS
-O GAME IS OVER AND NO RESULT
- **********************************************/
 
 int login(int fd) {
     char tmp_account[128];
@@ -286,11 +271,12 @@ int login(int fd) {
                         if (!users[i].isLogin) {
                             users[i].isLogin = 1;
                             users[i].fd = fd;
+                            printf("%s - Login Success\n", users[i].username);
                             dprintf(fd, "Login Success\n");
                             return i;
                         }
                         else
-                            dprintf(fd, "此帳號已登入\n");
+                            dprintf(fd, "Login Failed\n");
                     }
                 }
             }
@@ -300,13 +286,19 @@ int login(int fd) {
 }
 
 int logout(int fd) {
-    for (int i = 0; i < USER_CNT; i++) {
-        if (users[i].fd == fd) {
-            users[i].isLogin = 0;
-            users[i].fd = -1;
-            break;
-        }
-    }
+    /*
+     *for (int i = 0; i < USER_CNT; i++) {
+     *    if (users[i].fd == fd) {
+     *        users[i].isLogin = 0;
+     *        users[i].fd = -1;
+     *        break;
+     *    }
+     *}
+     */
+    int id = clientid[fd];
+    users[id].fd = -1;
+    users[id].isLogin = 0;
+    printf("%s - Logout\n", users[id].username);
     return 0;
 }
 
@@ -335,9 +327,6 @@ void listUsers(int fd) {
 void lanuchMatch(int fd) {
 
     int rivalFd;
-    int player = 1, i = -1, choice;
-    int check = -1;
-    char mark;
     char buf[MAX_LINE];
     
     listUsers(fd);
@@ -454,7 +443,7 @@ int game(int fd, int rivalfd, int idx) {
     
     if (i == 1) {
         dprintf(fd, "==>\aPlayer %d win \n", --player);
-        dprintf(rivalfd, "==>\aPlayer %d win \n", --player);
+        dprintf(rivalfd, "==>\aPlayer %d win \n", player);
     }
     else {
         dprintf(fd, "==>\aGame draw");
@@ -508,7 +497,6 @@ int checkwin(int i) {
 }
 
 void board(int fd, int i) {
-    /*system("clear");*/
     dprintf(fd, "\e[1;1H\e[2J\n\n\tTic Tac Toe - Room_%d\n\n", i);
 
     dprintf(fd, "Player 1 (X)  -  Player 2 (O)\n\n\n");
