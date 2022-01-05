@@ -133,8 +133,8 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
                     sourcePort = ntohs(tcpHeader->th_sport);
                     destPort = ntohs(tcpHeader->th_dport);
 
-                    printf("\t%s:%d -> %s:%d\n", sourceIp, sourcePort, destIp, destPort);
                     printf("Protocal: TCP\n");
+                    printf("\t%s:%d -> %s:%d\n", sourceIp, sourcePort, destIp, destPort);
 
                     if (verbose == 1) {
 
@@ -171,8 +171,23 @@ void callback(u_char *args, const struct pcap_pkthdr *header, const u_char *pack
                     udpHeader = (struct udphdr*)(packet + sizeof(struct ether_header) + sizeof(struct ip));
                     sourcePort = ntohs(udpHeader->uh_sport);
                     destPort = ntohs(udpHeader->uh_dport);
+                    u_int16_t len = ntohs(udpHeader->uh_ulen);
+                    u_int16_t checksum = ntohs(udpHeader->uh_sum);
 
                     printf("\t%s:%d -> %s:%d\n", sourceIp, sourcePort, destIp, destPort);
+
+                    if (verbose == 1) {
+                        printf("+-------------------------+-------------------------+\n");
+                        printf("| Source Port:       %5u| Destination Port:  %5u|\n", sourcePort, destPort);
+                        printf("+-------------------------+-------------------------+\n");
+                        printf("| Length:            %5u| Checksum:          %5u|\n", len, checksum);
+                        printf("+-------------------------+-------------------------+\n");
+
+                    }
+                    break;
+
+                case IPPROTO_ICMP:
+                    printf("Protocal: ICMP\n");
                     break;
 
                 default:
